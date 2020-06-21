@@ -355,7 +355,7 @@ class BERT(Transformer):
         """BERT的主体是基于Self-Attention的模块
         顺序：Att --> Add --> LN --> FFN --> Add --> LN
         """
-        x = inputs
+        x = inputs #[batch,seqlen,768]
         z = self.layer_norm_conds[0]
 
         attention_name = 'Transformer-%d-MultiHeadSelfAttention' % index
@@ -431,19 +431,20 @@ class BERT(Transformer):
     def apply_final_layers(self, inputs):
         """根据剩余参数决定输出
         """
-        x = inputs
+        x = inputs #[[batch,seqlen,768]]
         z = self.layer_norm_conds[0]
         outputs = [x]
 
         if self.with_pool:
             # Pooler部分（提取CLS向量）
-            x = outputs[0]
+            x = outputs[0] #x:[b,s,768]
             x = self.apply(
                 inputs=x,
                 layer=Lambda,
                 function=lambda x: x[:, 0],
                 name='Pooler'
-            )
+            ) #每个样本的cls的768的向量
+            #x[b,768] 
             pool_activation = 'tanh' if self.with_pool is True else self.with_pool
             x = self.apply(
                 inputs=x,
@@ -452,7 +453,7 @@ class BERT(Transformer):
                 activation=pool_activation,
                 kernel_initializer=self.initializer,
                 name='Pooler-Dense'
-            )
+            )# [b,hiddensize] #hiddensize can be not same as 768
             if self.with_nsp:
                 # Next Sentence Prediction部分
                 x = self.apply(
@@ -462,12 +463,12 @@ class BERT(Transformer):
                     activation='softmax',
                     kernel_initializer=self.initializer,
                     name='NSP-Proba'
-                )
-            outputs.append(x)
+                )# [b,768]==>[b,2]
+            outputs.append(x)# outputs=[[b,s,768],[b,2]]
 
         if self.with_mlm:
             # Masked Language Model部分
-            x = outputs[0]
+            x = outputs[0] #[b,s,768]
             x = self.apply(
                 inputs=x,
                 layer=Dense,
@@ -475,7 +476,7 @@ class BERT(Transformer):
                 activation=self.hidden_act,
                 kernel_initializer=self.initializer,
                 name='MLM-Dense'
-            )
+            )#x[b,s,embsize]
             x = self.apply(
                 inputs=self.simplify([x, z]),
                 layer=LayerNormalization,
